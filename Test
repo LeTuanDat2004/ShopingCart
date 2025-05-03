@@ -1,0 +1,107 @@
+// src/app/app-complete.js
+import Vue from 'vue';
+import VueRouter from 'vue-router'; // Import VueRouter
+
+// Sử dụng VueRouter plugin
+Vue.use(VueRouter);
+
+// --- Định nghĩa các Component Con (Movie Blurbs) ---
+const DunkirkBlurb = {
+  name: 'dunkirk-blurb',
+  template: `<div>
+    <h2>Dunkirk</h2>
+    <p class="movies__description">Miraculous evacuation of Allied soldiers from
+    Belgium, Britain, Canada, and France, who were cut off and surrounded by
+    the German army from the beaches and harbor of Dunkirk, France, during the
+    Battle of France in World War II.</p>
+  </div>`
+};
+
+const InterstellarBlurb = {
+  name: 'interstellar-blurb',
+  template: `<div>
+    <h2>Interstellar</h2>
+    <p class="movies__description">Interstellar chronicles the adventures of a
+    group of explorers who make use of a newly discovered wormhole to surpass
+    the limitations on human space travel and conquer the vast distances
+    involved in an interstellar voyage.</p>
+  </div>`
+};
+
+const TheDarkKnightRisesBlurb = {
+  name: 'the-dark-knight-rises-blurb',
+  template: `<div>
+    <h2>The Dark Knight Rises</h2>
+    <p class="movies__description">Batman encounters the mysterious Selina Kyle
+    and the villainous Bane, a new terrorist leader who overwhelms Gotham's
+    finest. The Dark Knight resurfaces to protect a city that has branded him
+    an enemy.</p>
+  </div>`
+};
+
+// Component cho trang chủ (root path)
+const IndexBlurb = {
+    name: 'index-blurb',
+    template: `<h2>Pick a Christopher Nolan movie!</h2>`
+};
+
+// Component cho trang không tìm thấy (wildcard path)
+const NotFoundBlurb = {
+    name: 'not-found-blurb',
+    template: `<h2>Not Found :(. Pick a movie from the list!</h2>`
+};
+
+
+// --- Định nghĩa Routes ---
+const routes = [
+  {
+    path: '/', // Route gốc
+    component: IndexBlurb
+  },
+  {
+    path: '/dunkirk',
+    component: DunkirkBlurb
+  },
+  {
+    path: '/interstellar',
+    component: InterstellarBlurb
+  },
+  {
+    path: '/the-dark-knight-rises',
+    component: TheDarkKnightRisesBlurb
+  },
+  {
+    path: '*', // Wildcard path - Bắt tất cả các route không khớp ở trên
+    component: NotFoundBlurb
+  }
+  // Lưu ý: Trong ví dụ gốc của sách có thể có redirect từ '/' sang nơi khác,
+  // nhưng để đơn giản, ta tạo component IndexBlurb riêng.
+];
+
+// --- Tạo Router Instance ---
+export const router = new VueRouter({
+  mode: 'history', // Sử dụng history mode cho URL đẹp (cần cấu hình server nếu deploy)
+  routes // Truyền mảng routes đã định nghĩa
+});
+
+
+// --- Định nghĩa App Component Chính ---
+const App = {
+  name: 'App',
+  // Template chứa các router-link và router-view
+  template: `<div id="app">
+    <div class="movies">
+      <h2>Which movie?</h2>
+      <router-link to="/dunkirk">/dunkirk</router-link>
+      <router-link to="/interstellar">/interstellar</router-link>
+      <router-link to="/the-dark-knight-rises">/the-dark-knight-rises</router-link>
+
+      <!-- Router View là nơi component tương ứng với route sẽ được render -->
+      <router-view></router-view>
+    </div>
+  </div>`,
+  // Không cần đăng ký components: {} ở đây nữa vì VueRouter tự xử lý
+};
+
+// Export App component để main.js sử dụng
+export default App;
