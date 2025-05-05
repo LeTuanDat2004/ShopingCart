@@ -1,0 +1,121 @@
+// src/store/modules/cart.js
+import mockApi from '../../mockApi'; // Hoặc import axios nếu dùng API thật
+// Giả định mockApi có các hàm fetchCart, addProductToCart, removeProductFromCart, removeAllProductsFromCart
+// và chúng trả về Promise chứa dữ liệu giỏ hàng đã cập nhật.
+
+const actions = {
+  /**
+   * Lấy trạng thái giỏ hàng hiện tại từ server/API.
+   * Commit mutation UPDATE_CART_ITEMS với dữ liệu nhận được.
+   */
+  async getCartItems({ commit, rootState }) {
+    // Lấy token từ login module state (nếu API yêu cầu xác thực)
+    const token = rootState.login.token;
+    if (!token && process.env.NODE_ENV !== 'test') { // Bỏ qua check token khi test nếu cần
+      console.warn("[Cart Actions] No token found, cannot fetch cart.");
+      // Có thể dispatch logout hoặc hiển thị lỗi
+      // commit('UPDATE_CART_ITEMS', []); // Set giỏ hàng rỗng nếu không có token
+      return; // Dừng action
+    }
+
+    console.log("[Cart Actions] Fetching cart items...");
+    try {
+      // Gọi API (thay mockApi.fetchCart() bằng axios.get(`/api/cart?token=${token}`) nếu có API thật)
+      const cart = await mockApi.fetchCart();
+      commit('UPDATE_CART_ITEMS', cart);
+      console.log("[Cart Actions] Cart fetched and updated.");
+    } catch (error) {
+      console.error("[Cart Actions] Error fetching cart items:", error);
+      // Xử lý lỗi (ví dụ: token hết hạn -> dispatch logout)
+      // commit('SET_CART_ERROR', error);
+    }
+  },
+
+  /**
+   * Thêm một sản phẩm vào giỏ hàng (gọi API server).
+   * Commit mutation UPDATE_CART_ITEMS với giỏ hàng mới nhất từ server.
+   * @param {object} product - Đối tượng sản phẩm cần thêm.
+   */
+  async addCartItem({ commit, rootState }, product) {
+    const token = rootState.login.token;
+     if (!token && process.env.NODE_ENV !== 'test') {
+       console.warn("[Cart Actions] No token found, cannot add item.");
+       return Promise.reject('Authentication required'); // Trả về lỗi để component xử lý nếu cần
+    }
+
+    console.log("[Cart Actions] Adding item to cart:", product);
+    try {
+      // Gọi API (thay mockApi.addProductToCart(product) bằng axios.post(`/api/cart?token=${token}`, product))
+      const updatedCart = await mockApi.addProductToCart(product);
+      commit('UPDATE_CART_ITEMS', updatedCart);
+      console.log("[Cart Actions] Item added, cart updated.");
+      // Trả về Promise thành công (không cần giá trị cụ thể nếu component không dùng)
+      return Promise.resolve();
+    } catch (error) {
+      console.error("[Cart Actions] Error adding item to cart:", error);
+      // commit('SET_CART_ERROR', error);
+      // Ném lỗi ra để component có thể bắt (ví dụ: để không chuyển hướng trang)
+      return Promise.reject(error);
+    }
+  },
+
+  /**
+   * Giảm số lượng hoặc xóa sản phẩm khỏi giỏ hàng (gọi API server).
+   * Commit mutation UPDATE_CART_ITEMS với giỏ hàng mới nhất từ server.
+   * @param {object} product - Đối tượng sản phẩm cần xóa/giảm.
+   */
+  async removeCartItem({ commit, rootState }, product) {
+    const token = rootState.login.token;
+     if (!token && process.env.NODE_ENV !== 'test') {
+       console.warn("[Cart Actions] No token found, cannot remove item.");
+        return Promise.reject('Authentication required');
+    }
+
+    console.log("[Cart Actions] Removing item from cart:", product);
+    try {
+       // Gọi API (thay mockApi.removeProductFromCart(product) bằng axios.post(`/api/cart/delete?token=${token}`, product))
+      const updatedCart = await mockApi.removeProductFromCart(product);
+      commit('UPDATE_CART_ITEMS', updatedCart);
+      console.log("[Cart Actions] Item removed/decreased, cart updated.");
+      return Promise.resolve();
+    } catch (error) {
+      console.error("[Cart Actions] Error removing item from cart:", error);
+      // commit('SET_CART_ERROR', error);
+       return Promise.reject(error);
+    }
+  },
+
+  /**
+   * Xóa tất cả sản phẩm khỏi giỏ hàng (gọi API server).
+   * Commit mutation UPDATE_CART_ITEMS với giỏ hàng trống từ server.
+   */
+  async removeAllCartItems({ commit, rootState }) {
+     const token = rootState.login.token;
+      if (!token && process.env.NODE_ENV !== 'test') {
+       console.warn("[Cart Actions] No token found, cannot clear cart.");
+        return Promise.reject('Authentication required');
+    }
+
+    console.log("[Cart Actions] Clearing all items from cart...");
+    try {
+       // Gọi API (thay mockApi.removeAllProductsFromCart() bằng axios.post(`/api/cart/delete/all?token=${token}`))
+      const updatedCart = await mockApi.removeAllProductsFromCart();
+      commit('UPDATE_CART_ITEMS', updatedCart); // Nên là mảng rỗng []
+      console.log("[Cart Actions] All items cleared, cart updated.");
+      return Promise.resolve();
+    } catch (error) {
+      console.error("[Cart Actions] Error clearing cart:", error);
+      // commit('SET_CART_ERROR', error);
+       return Promise.reject(error);
+    }
+  }
+};
+
+// Đừng quên export actions này trong đối tượng module cart.js
+// export default {
+//   namespaced: true,
+//   state,
+//   mutations,
+//   actions, // <-- Export actions ở đây
+//   getters
+// };

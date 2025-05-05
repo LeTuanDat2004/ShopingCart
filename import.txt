@@ -1,0 +1,576 @@
+Ok, chúng ta sẽ đi vào chi tiết cách xây dựng lại ứng dụng Shopping Cart, nhưng lần này tích hợp thêm routing như được mô tả trong phần thứ hai của Chương 7 ("Dynamic Route Matching" và các phần sau đó). Mục tiêu là tách ứng dụng thành các trang riêng biệt: trang danh sách sản phẩm, trang chi tiết sản phẩm, trang giỏ hàng, và trang đăng nhập.
+
+Giả định:
+
+Bạn đang làm việc dựa trên mã nguồn của ứng dụng Shopping Cart từ Chương 5 (đã có Vuex, modules product, cart, và tương tác với mock API hoặc server server.js).
+Bạn đã cài đặt vue-router (phiên bản 3 cho Vue 2 hoặc 4 cho Vue 3).
+Project Structure (Cấu trúc Thư mục - Thêm router):
+
+shopping-cart-project/
+├── ... (node_modules, public, server files) ...
+├── src/
+│   ├── assets/
+│   ├── components/
+│   │   ├── cart/
+│   │   │   ├── CartList.vue
+│   │   │   └── CartListItem.vue
+│   │   ├── product/
+│   │   │   ├── ProductList.vue
+│   │   │   ├── ProductListItem.vue
+│   │   │   └── ProductItem.vue  <-- Component MỚI cho trang chi tiết
+│   │   ├── login/
+│   │   │   └── LoginBox.vue    <-- Component MỚI cho trang đăng nhập
+│   │   └── NotFound.vue   <-- Component MỚI cho trang 404
+│   ├── store/
+│   │   ├── modules/
+│   │   │   ├── cart.js
+│   │   │   ├── product.js
+│   │   │   └── login.js     <-- Module MỚI cho login/auth
+│   │   └── index.js
+│   ├── router/
+│   │   └── index.js         <-- File MỚI định nghĩa routes và router instance
+│   ├── App.vue
+│   └── main.js
+├── ... (config files) ...
+content_copy
+download
+Use code with caution.
+Chi tiết Nội dung Các File và Các Bước:
+
+1. Tạo Các Component Mới:
+
+src/components/product/ProductItem.vue: Component hiển thị trang chi tiết của một sản phẩm. Nó sẽ cần nhận id sản phẩm (qua props hoặc $route.params) để lấy thông tin chi tiết từ store.
+<template>
+  <section v-if="product" class="product-item box">
+    <!-- Nút quay lại -->
+    <span class="return-icon" @click="$router.go(-1)" title="Go Back">
+      <font-awesome-icon :icon="faArrowLeft" />
+    </span>
+    <div class="product-item__details">
+      <h1 class="title is-4">{{ product.title }}</h1>
+      <!-- Hiển thị thêm chi tiết: type, description, created_at -->
+      <span class="tag product-item__tag">{{ product.product_type }}</span>
+      <p class="product-item__description">{{ product.description }}</p>
+      <p v-if="product.created_at" class="product-item__created_at">
+        Founded: <span class="has-text-weight-bold">{{ product.created_at }}</span>
+      </p>
+      <button
+        class="button is-primary product-item__button"
+        @click="addAndGoToCart(product)">
+          <font-awesome-icon :icon="faCartPlus" /> Add to Cart
+      </button>
+    </div>
+    <div class="product-item__image">
+      <!-- Giả sử có ảnh -->
+      <img :src="getImageUrl(product.image_tag)" :alt="product.title" />
+    </div>
+  </section>
+  <div v-else>
+      Loading product details or product not found...
+      <!-- Hoặc chuyển hướng nếu không tìm thấy -->
+  </div>
+</template>
+
+<script setup>
+import { computed, onMounted, watch } from 'vue';
+import { useStore } from 'vuex';
+import { useRoute, useRouter } from 'vue-router'; // Vue Router 4 composables
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
+import { faArrowLeft, faCartPlus } from '@fortawesome/free-solid-svg-icons';
+
+const store = useStore();
+const route = useRoute(); // Lấy thông tin route hiện tại
+const router = useRouter(); // Lấy router instance để điều hướng
+
+// Lấy ID từ route param
+const productId = computed(() => Number(route.params.id));
+
+// Getter trả về hàm để lấy product theo ID
+const getProductById = computed(() => store.getters['product/productItemFromId']);
+// Lấy product cụ thể dựa trên ID từ route
+const product = computed(() => getProductById.value(productId.value));
+
+// Hàm lấy URL ảnh (tương tự CartListItem)
+const getImageUrl = (imageTag) => {
+    // ... logic lấy URL ảnh ...
+     return ''; // Tạm
+}
+
+// Hàm thêm vào giỏ và chuyển hướng
+const addAndGoToCart = async (productToAdd) => {
+    try {
+        // Dispatch action và chờ nó hoàn thành (nếu action trả về Promise)
+        await store.dispatch('cart/addCartItem', productToAdd);
+        // Chuyển hướng đến trang giỏ hàng
+        router.push('/cart');
+    } catch (error) {
+        console.error("Failed to add item and navigate:", error);
+        // Xử lý lỗi nếu cần
+    }
+}
+
+// Đảm bảo danh sách sản phẩm đã được tải (nếu người dùng vào thẳng trang này)
+// Cách đơn giản: gọi lại fetch nếu chưa có product
+onMounted(() => {
+    if (!product.value && store.state.product.productItems.length === 0) {
+        console.log('ProductItem mounted, fetching all products...');
+        store.dispatch('product/getProductItems'); // Cần token nếu API yêu cầu
+    }
+});
+
+// Theo dõi nếu productItems thay đổi (sau khi fetch) để đảm bảo product được cập nhật
+watch(() => store.state.product.productItems, (newItems) => {
+    if (!product.value && newItems.length > 0) {
+         console.log('Product list updated, trying to find product again...');
+         // Vue sẽ tự tính toán lại computed 'product'
+    }
+});
+</script>
+
+<style scoped>
+  /* CSS cho trang chi tiết sản phẩm */
+  .product-item { display: flex; position: relative; }
+  .product-item__details { flex: 1; padding-right: 20px; }
+  .product-item__image img { max-width: 250px; max-height: 250px; object-fit: contain;}
+  .return-icon { position: absolute; top: 15px; left: 15px; cursor: pointer; color: #3273dc; font-size: 1.2em; }
+  .product-item__tag { margin-left: 10px; vertical-align: middle; }
+  .product-item__description, .product-item__created_at { margin: 10px 0; }
+  .product-item__button { margin-top: 15px; }
+  .product-item__button svg { margin-right: 5px; }
+</style>
+content_copy
+download
+Use code with caution.
+Vue
+src/components/login/LoginBox.vue: Component cho trang đăng nhập, chứa nút Login.
+<template>
+  <div class="login-box box has-text-centered">
+    <h2 class="title">Fullstack Clothing</h2>
+    <button
+      class="button is-primary"
+      @click="performLogin"
+      :class="{ 'is-loading': loading }"
+      :disabled="loading">
+      Login
+    </button>
+    <p v-if="loginError" class="has-text-danger mt-2">Login failed. Please try again.</p>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue';
+import { useStore } from 'vuex';
+import { useRouter } from 'vue-router';
+
+const store = useStore();
+const router = useRouter();
+
+// Trạng thái lỗi cục bộ
+const loginError = ref(false);
+
+// Lấy trạng thái loading từ store (với namespace)
+const loading = computed(() => store.getters['login/loading']); // Giả sử có getter 'loading'
+
+const performLogin = async () => {
+  loginError.value = false; // Reset lỗi
+  try {
+    // Dispatch action login và chờ nó hoàn thành
+    await store.dispatch('login/loginAction'); // Đổi tên action nếu khác
+    // Chuyển hướng đến trang products sau khi login thành công
+    router.push('/products');
+  } catch (error) {
+    console.error("Login failed:", error);
+    loginError.value = true; // Hiển thị lỗi
+  }
+};
+</script>
+
+<style scoped>
+.login-box { max-width: 400px; margin: 50px auto; padding: 30px; }
+.mt-2 { margin-top: 0.5rem; }
+</style>
+content_copy
+download
+Use code with caution.
+Vue
+src/components/NotFound.vue: Component đơn giản cho trang 404.
+<template>
+  <div class="has-text-centered">
+    <h1 class="title is-1">404</h1>
+    <h2 class="subtitle">Sorry, Page Not Found :(</h2>
+    <p>Use the navigation links above to navigate.</p>
+    <!-- Hoặc thêm link về trang chủ -->
+    <router-link to="/products">Go to Shop</router-link>
+  </div>
+</template>
+
+<script setup>
+// Không cần script phức tạp
+</script>
+
+<style scoped>
+/* CSS nếu cần */
+</style>
+content_copy
+download
+Use code with caution.
+Vue
+2. Tạo Vuex Module cho Login (src/store/modules/login.js):
+
+// src/store/modules/login.js
+import mockApi from '../../mockApi'; // Hoặc axios nếu gọi API thật
+
+// Lấy token từ localStorage khi store khởi tạo (để duy trì đăng nhập khi reload)
+const initialToken = localStorage.getItem('authToken');
+
+const state = () => ({
+  token: initialToken || null, // null nếu chưa đăng nhập
+  loading: false,
+  error: null,
+});
+
+const mutations = {
+  SET_TOKEN(state, token) {
+    state.token = token;
+  },
+  SET_LOADING(state, isLoading) {
+    state.loading = isLoading;
+  },
+  SET_ERROR(state, error) {
+    state.error = error;
+  },
+  CLEAR_AUTH(state) { // Mutation để xóa trạng thái auth
+    state.token = null;
+    state.loading = false;
+    state.error = null;
+  }
+};
+
+const actions = {
+  async loginAction({ commit }) {
+    commit('SET_LOADING', true);
+    commit('SET_ERROR', null); // Xóa lỗi cũ
+    try {
+      // Giả lập gọi API login (thay bằng axios.post('/api/login') nếu có API thật)
+      const response = await mockApi.login(); // Giả sử mockApi có hàm login trả về { token: '...' }
+      const token = response.token;
+
+      localStorage.setItem('authToken', token); // Lưu token vào localStorage
+      commit('SET_TOKEN', token);
+      commit('SET_LOADING', false);
+      // Không cần trả về gì đặc biệt, component sẽ chuyển hướng
+    } catch (error) {
+      localStorage.removeItem('authToken'); // Xóa token nếu login lỗi
+      commit('CLEAR_AUTH'); // Xóa trạng thái auth trong store
+      commit('SET_ERROR', 'Login failed'); // Có thể lưu lỗi cụ thể hơn
+      commit('SET_LOADING', false);
+      throw error; // Ném lỗi ra để component bắt được trong .catch()
+    }
+  },
+
+  logoutAction({ commit }) {
+    // Không cần gọi API, chỉ cần xóa local và cập nhật state
+    return new Promise((resolve) => { // Trả về Promise để component có thể .then() (ví dụ chuyển hướng)
+      localStorage.removeItem('authToken');
+      commit('CLEAR_AUTH');
+      console.log('Logged out');
+      resolve();
+    });
+  }
+};
+
+const getters = {
+  isAuthenticated: state => !!state.token, // Kiểm tra xem đã đăng nhập chưa
+  loading: state => state.loading,
+  token: state => state.token // Cần getter này để watch trong App.vue
+};
+
+export default {
+  namespaced: true,
+  state,
+  mutations,
+  actions,
+  getters
+};
+content_copy
+download
+Use code with caution.
+JavaScript
+3. Cập nhật Store Chính (src/store/index.js):
+
+Import và đăng ký loginModule mới.
+
+// src/store/index.js
+import { createStore } from 'vuex';
+import productModule from './modules/product';
+import cartModule from './modules/cart';
+import loginModule from './modules/login'; // <-- Import module login
+
+const store = createStore({
+  modules: {
+    product: productModule,
+    cart: cartModule,
+    login: loginModule // <-- Đăng ký module login
+  }
+});
+
+export default store;
+content_copy
+download
+Use code with caution.
+JavaScript
+4. Cập nhật Actions gọi API (product.js, cart.js):
+
+Sửa các action getProductItems, getCartItems để lấy token từ localStorage (hoặc tốt hơn là từ loginModule state nếu đã đồng bộ) và gửi kèm theo yêu cầu API.
+
+// Ví dụ trong src/store/modules/product.js
+const actions = {
+  // Nhận thêm rootState và rootGetters nếu cần truy cập state/getter module khác
+  async getProductItems({ commit, rootState }) {
+    // Ưu tiên lấy token từ state Vuex đã được đồng bộ
+    const token = rootState.login.token;
+    // Hoặc lấy trực tiếp từ localStorage nếu chưa chắc chắn Vuex đã có
+    // const token = localStorage.getItem('authToken');
+
+    if (!token) {
+       console.warn("Không có token, không thể lấy sản phẩm");
+       // Có thể commit mutation báo lỗi hoặc dispatch logout
+       return; // Dừng action nếu không có token
+    }
+
+    try {
+      // Gọi API với token (ví dụ dùng query param)
+      const response = await axios.get(`/api/products?token=${token}`);
+      commit('UPDATE_PRODUCT_ITEMS', response.data);
+    } catch (error) {
+      console.error("Lỗi khi lấy sản phẩm (cần token):", error);
+       // Xử lý lỗi (ví dụ: token hết hạn -> dispatch logout)
+       if (error.response && error.response.status === 401) { // Unauthorized
+            // dispatch('login/logoutAction', null, { root: true }); // Dispatch action ở module khác
+       }
+    }
+  }
+};
+// Áp dụng tương tự cho getCartItems trong cart.js
+content_copy
+download
+Use code with caution.
+JavaScript
+5. Định nghĩa Routes và Navigation Guards (src/router/index.js):
+
+Tạo file này để quản lý việc định tuyến.
+
+// src/router/index.js
+import { createRouter, createWebHistory } from 'vue-router';
+import store from '../store'; // Import store để kiểm tra trạng thái đăng nhập
+
+// Import các component sẽ dùng làm trang
+import ProductList from '../components/product/ProductList.vue';
+import ProductItem from '../components/product/ProductItem.vue';
+import CartList from '../components/cart/CartList.vue';
+import LoginBox from '../components/login/LoginBox.vue';
+import NotFound from '../components/NotFound.vue';
+
+const routes = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: LoginBox,
+    // Guard: Nếu đã đăng nhập thì chuyển về trang sản phẩm
+    beforeEnter: (to, from, next) => {
+      if (store.getters['login/isAuthenticated']) {
+        next('/products');
+      } else {
+        next(); // Cho phép vào trang login
+      }
+    }
+  },
+  {
+    // Route gốc chuyển hướng về products nếu đã login, về login nếu chưa
+    path: '/',
+    redirect: () => {
+       return store.getters['login/isAuthenticated'] ? '/products' : '/login';
+    }
+  },
+  {
+    path: '/products',
+    name: 'ProductList',
+    component: ProductList,
+    meta: { requiresAuth: true } // Đánh dấu route này cần đăng nhập
+  },
+  {
+    path: '/products/:id', // Route động cho chi tiết sản phẩm
+    name: 'ProductDetail',
+    component: ProductItem,
+    props: true, // Cho phép truyền :id vào làm prop cho component
+    meta: { requiresAuth: true }, // Cũng cần đăng nhập
+    // Guard kiểm tra ID hợp lệ (ví dụ)
+    // beforeEnter: (to, from, next) => { ... kiểm tra to.params.id ... }
+  },
+  {
+    path: '/cart',
+    name: 'Cart',
+    component: CartList,
+    meta: { requiresAuth: true } // Cần đăng nhập
+  },
+  {
+    path: '/:pathMatch(.*)*', // Bắt tất cả các route không khớp (404)
+    name: 'NotFound',
+    component: NotFound
+    // Không cần requiresAuth cho trang 404
+  }
+];
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL), // History mode
+  routes
+});
+
+// Global Navigation Guard - Chạy trước mỗi lần chuyển route
+router.beforeEach((to, from, next) => {
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+  const isAuthenticated = store.getters['login/isAuthenticated']; // Kiểm tra trạng thái đăng nhập từ store
+
+  if (requiresAuth && !isAuthenticated) {
+    // Nếu route yêu cầu đăng nhập mà người dùng chưa đăng nhập
+    next('/login'); // Chuyển hướng về trang login
+  } else {
+    next(); // Cho phép đi tiếp
+  }
+});
+
+export default router;
+content_copy
+download
+Use code with caution.
+JavaScript
+6. Cập nhật main.js để sử dụng Router:
+
+// src/main.js
+import { createApp } from 'vue'
+import App from './App.vue'
+import store from './store'
+import router from './router' // <-- Import router
+
+import './assets/main.css' // Hoặc CSS khác
+
+/* Import và thiết lập Font Awesome nếu dùng toàn cục */
+// import { library } from '@fortawesome/fontawesome-svg-core'
+// import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+// import { faShoppingCart, faTrash, ... } from '@fortawesome/free-solid-svg-icons'
+// library.add(faShoppingCart, faTrash, ...)
+
+const app = createApp(App);
+
+app.use(store);
+app.use(router); // <-- Sử dụng router
+
+// app.component('font-awesome-icon', FontAwesomeIcon) // Đăng ký nếu dùng toàn cục
+
+app.mount('#app');
+content_copy
+download
+Use code with caution.
+JavaScript
+7. Cập nhật App.vue để dùng <router-view> và <router-link>:
+
+<template>
+  <div id="app-container">
+    <!-- Navigation chỉ hiển thị khi đã đăng nhập -->
+    <nav class="navigation-buttons" v-if="isAuthenticated">
+      <router-link to="/products" class="nav-link">
+        <font-awesome-icon :icon="faStore" /> Shop
+      </router-link>
+      <router-link to="/cart" class="nav-link cart-link">
+        <font-awesome-icon :icon="faShoppingCart" />
+        <span v-if="cartQuantity > 0" class="cart-count">{{ cartQuantity }}</span>
+      </router-link>
+      <button @click="performLogout" class="button is-text is-pulled-right">Logout</button>
+    </nav>
+
+    <div class="layout">
+      <!-- Nội dung trang sẽ được render ở đây -->
+      <router-view></router-view>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { computed, watch } from 'vue';
+import { useStore } from 'vuex';
+import { useRouter } from 'vue-router';
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
+import { faStore, faShoppingCart } from '@fortawesome/free-solid-svg-icons'; // Import icon cần dùng
+
+const store = useStore();
+const router = useRouter();
+
+// Lấy các getters cần thiết
+const isAuthenticated = computed(() => store.getters['login/isAuthenticated']);
+const cartQuantity = computed(() => store.getters['cart/cartQuantity']);
+const token = computed(() => store.getters['login/token']); // Để watch
+
+// Hàm logout
+const performLogout = async () => {
+  try {
+    await store.dispatch('login/logoutAction');
+    // Chuyển về trang login sau khi logout thành công
+    router.push('/login');
+  } catch (error) {
+    console.error("Logout failed:", error);
+  }
+};
+
+// Hàm cập nhật state ban đầu (tương tự trước)
+const updateInitialState = (currentToken) => {
+  if (currentToken) {
+     console.log('Updating initial state with token...');
+     store.dispatch('cart/getCartItems'); // Giờ action cart/product sẽ tự lấy token từ state
+     store.dispatch('product/getProductItems');
+  }
+};
+
+// Watch token thay đổi (khi đăng nhập/logout) để fetch dữ liệu
+watch(token, (newToken, oldToken) => {
+  console.log('Token changed:', oldToken, '->', newToken);
+  if (newToken && !oldToken) { // Chỉ fetch khi vừa đăng nhập (từ null -> có token)
+      updateInitialState(newToken);
+  }
+  // Không cần fetch lại nếu logout (token -> null)
+});
+
+// Không cần created() để fetch nữa vì guard sẽ chuyển hướng nếu chưa login,
+// và watch token sẽ fetch khi vừa login xong.
+// Nếu muốn fetch ngay khi App tạo ra *và* đã có token (duy trì đăng nhập):
+// import { onMounted } from 'vue';
+// onMounted(() => {
+//    const existingToken = store.getters['login/token']; // Lấy token từ store
+//    if (existingToken) {
+//        updateInitialState(existingToken);
+//    }
+// });
+
+</script>
+
+<style>
+/* ... styles ... */
+</style>
+content_copy
+download
+Use code with caution.
+Vue
+Giải thích Luồng Đăng nhập/Bảo vệ:
+
+Truy cập ban đầu: Người dùng vào /. Router redirect về /login vì chưa đăng nhập (isAuthenticated là false). LoginBox hiển thị.
+Đăng nhập: Người dùng click Login. LoginBox dispatch login/loginAction.
+Action gọi API (mock), lưu token vào localStorage, commit SET_TOKEN. State token thay đổi từ null sang giá trị token.
+isAuthenticated getter trả về true.
+LoginBox chuyển hướng người dùng đến /products sau khi action thành công.
+Global Guard (beforeEach): Router kiểm tra route /products. Nó requiresAuth. isAuthenticated là true. Router cho phép đi tiếp (next()).
+Watch trong App.vue: watch phát hiện token thay đổi từ null thành có giá trị. Nó gọi updateInitialState.
+updateInitialState dispatch cart/getCartItems và product/getProductItems.
+Các action này giờ lấy token từ rootState.login.token, gọi API (mock) và cập nhật state cartItems và productItems.
+Render: App.vue render navigation (vì isAuthenticated là true). <router-view> render ProductList. ProductList lấy productItems từ getter và hiển thị.
+Truy cập route được bảo vệ khi chưa đăng nhập: Nếu người dùng (đã logout) cố vào /cart. Global guard thấy requiresAuth là true nhưng isAuthenticated là false. Nó gọi next('/login'), chuyển hướng người dùng.
+Truy cập /login khi đã đăng nhập: Nếu người dùng đã đăng nhập cố vào /login. Guard beforeEnter của route /login thấy isAuthenticated là true. Nó gọi next('/products'), chuyển hướng người dùng.
+Đây là một cấu trúc chi tiết, tích hợp routing, Vuex state, localStorage và các navigation guards để tạo ra một luồng ứng dụng có xác thực cơ bản.
