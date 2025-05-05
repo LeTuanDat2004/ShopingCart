@@ -1,385 +1,192 @@
-Tuyệt vời! Việc chuyển từ mock API sang sử dụng axios để tương tác với API server thật là bước quan trọng để hoàn thiện ứng dụng. Chúng ta sẽ cập nhật lại các file liên quan (chủ yếu là các action trong Vuex store) để thực hiện điều này.
+Ôi, bạn hoàn toàn chính xác! Xin lỗi vì sự thiếu sót đó trong các đoạn code server.js trước đây. Đúng là chúng ta đã xây dựng các endpoint cho products và cart, nhưng lại quên không thêm endpoint /api/login để xử lý yêu cầu đăng nhập từ client.
 
-Giả định:
+Đây chính là lý do rất có khả năng gây ra lỗi "Login failed" mà bạn gặp phải, vì khi axios.post('/api/login') được gọi từ action Vuex, server Express không tìm thấy route nào khớp và có thể trả về lỗi 404 Not Found hoặc một lỗi khác, khiến axios đi vào nhánh .catch().
 
-Bạn có một server backend (như server.js đã thảo luận) đang chạy trên http://localhost:3000.
-Server này cung cấp các API endpoint như /api/products, /api/cart, /api/login, v.v.
-Các endpoint /api/products và /api/cart (và có thể cả các endpoint POST) yêu cầu một token được gửi kèm dưới dạng query parameter (ví dụ: /api/products?token=YOUR_TOKEN).
-Bạn đã cài đặt axios: npm install axios.
-Bạn đã cấu hình proxy trong vue.config.js hoặc vite.config.js để chuyển tiếp các yêu cầu /api đến http://localhost:3000.
-Cập nhật các file:
+Bổ sung Endpoint /api/login vào server.js:
 
-1. src/store/modules/product.js (Sử dụng axios):
+Hãy mở file server.js và thêm đoạn code sau vào phần "API Endpoints", ví dụ, đặt nó trước endpoint /api/products:
 
-// src/store/modules/product.js
-import axios from 'axios'; // Import axios
+// server.js
+// ... các phần require và middleware khác ...
 
-const state = () => ({
-  productItems: [],
-  loading: false, // Thêm trạng thái loading nếu cần
-  error: null,    // Thêm trạng thái lỗi nếu cần
+// ----- API Endpoints -----
+
+// POST /api/login - Xử lý yêu cầu đăng nhập (GIẢ LẬP)
+// API này không cần kiểm tra username/password, chỉ trả về token cố định
+app.post('/api/login', (req, res) => {
+  console.log("--- Yêu cầu POST /api/login nhận được ---");
+  // Trong ứng dụng thực tế, bạn sẽ kiểm tra req.body.username và req.body.password
+  // và tạo token dựa trên thông tin đó.
+  // Ở đây, chúng ta chỉ trả về một token giả cố định.
+  const MOCK_API_TOKEN = 'D6W69PRgCoDKgHZGJmRUNA-example-token'; // Token giả định
+
+  // Trả về JSON thành công với token
+  res.json({
+    success: true, // Báo hiệu login thành công
+    token: MOCK_API_TOKEN
+  });
+  console.log("--- Đã trả về token cho /api/login ---");
 });
 
-const mutations = {
-  UPDATE_PRODUCT_ITEMS(state, payload) {
-    state.productItems = payload;
-  },
-  SET_PRODUCT_LOADING(state, isLoading) {
-    state.loading = isLoading;
-  },
-  SET_PRODUCT_ERROR(state, error) {
-    state.error = error;
+// GET /api/products - Lấy danh sách sản phẩm (CẦN TOKEN)
+app.get('/api/products', (req, res) => {
+  const token = req.query.token; // Lấy token từ query param
+  const MOCK_API_TOKEN = 'D6W69PRgCoDKgHZGJmRUNA-example-token'; // Token cần khớp
+
+  console.log("--- Yêu cầu GET /api/products ---");
+  console.log("Token nhận được:", token);
+
+  // KIỂM TRA TOKEN ĐƠN GIẢN
+  if (!token || token !== MOCK_API_TOKEN) {
+    console.log("!!! Token không hợp lệ hoặc bị thiếu !!!");
+    return res.status(401).json({ success: false, message: 'Unauthorized: Invalid or missing token' });
   }
-};
 
-const actions = {
-  async getProductItems({ commit, rootState }) {
-    // Lấy token từ login module state
-    const token = rootState.login.token;
-    if (!token) {
-      console.warn("[Product Actions] No token, cannot fetch products.");
-      commit('SET_PRODUCT_ERROR', 'Authentication required');
-      // Có thể dispatch logout hoặc yêu cầu đăng nhập lại
-      return;
+  console.log("Token hợp lệ, đang đọc file sản phẩm...");
+  readJsonFile(PRODUCT_DATA_FILE, (err, products) => {
+    if (err) {
+      return res.status(500).send('Lỗi server khi lấy sản phẩm.');
     }
-
-    commit('SET_PRODUCT_LOADING', true); // Báo bắt đầu tải
-    commit('SET_PRODUCT_ERROR', null);  // Xóa lỗi cũ
-    console.log("[Product Actions] Fetching products with token...");
-
-    try {
-      // Gọi API thật bằng axios, truyền token qua params
-      const response = await axios.get('/api/products', {
-        params: { token: token }
-      });
-      commit('UPDATE_PRODUCT_ITEMS', response.data); // Cập nhật state
-      console.log("[Product Actions] Products fetched successfully.");
-    } catch (error) {
-      console.error("[Product Actions] Error fetching products:", error.response?.data || error.message);
-      commit('SET_PRODUCT_ERROR', error.response?.data?.message || 'Failed to fetch products');
-      // Xử lý lỗi xác thực (ví dụ: token hết hạn)
-      if (error.response && error.response.status === 401) {
-         // Cần dispatch action logout ở module login
-         // Lưu ý cách dispatch action của module khác: { root: true }
-         // dispatch('login/logoutAction', null, { root: true }); // Cần import { dispatch } nếu dùng cách này
-         // Hoặc component sẽ xử lý chuyển hướng dựa trên lỗi
-      }
-    } finally {
-      // Luôn commit loading false dù thành công hay thất bại
-      commit('SET_PRODUCT_LOADING', false);
-    }
-  }
-};
-
-const getters = {
-  productItems: state => state.productItems,
-  productLoading: state => state.loading, // Thêm getter nếu cần
-  productError: state => state.error     // Thêm getter nếu cần
-};
-
-export default {
-  namespaced: true,
-  state,
-  mutations,
-  actions,
-  getters
-};
-content_copy
-download
-Use code with caution.
-JavaScript
-2. src/store/modules/cart.js (Sử dụng axios):
-
-// src/store/modules/cart.js
-import axios from 'axios';
-
-const state = () => ({
-  cartItems: [],
-  loading: false, // Có thể thêm loading/error riêng cho cart
-  error: null
+    res.setHeader('Cache-Control', 'no-cache');
+    res.json(products);
+    console.log("--- Đã trả về danh sách sản phẩm ---");
+  });
 });
 
-const mutations = {
-  UPDATE_CART_ITEMS(state, payload) {
-    state.cartItems = payload;
-  },
-   SET_CART_LOADING(state, isLoading) {
-    state.loading = isLoading;
-  },
-  SET_CART_ERROR(state, error) {
-    state.error = error;
-  }
-  // Không cần các mutation riêng cho add/remove vì server luôn trả về cart mới
-};
+// GET /api/cart - Lấy giỏ hàng hiện tại (CẦN TOKEN)
+app.get('/api/cart', (req, res) => {
+    const token = req.query.token;
+    const MOCK_API_TOKEN = 'D6W69PRgCoDKgHZGJmRUNA-example-token';
 
-const actions = {
-  async getCartItems({ commit, rootState }) {
-    const token = rootState.login.token;
-    if (!token) {
-        console.warn("[Cart Actions] No token, cannot fetch cart.");
-        commit('SET_CART_ERROR', 'Authentication required');
-        // commit('UPDATE_CART_ITEMS', []); // Có thể reset cart về rỗng
-        return;
+    console.log("--- Yêu cầu GET /api/cart ---");
+    console.log("Token nhận được:", token);
+
+    if (!token || token !== MOCK_API_TOKEN) {
+       console.log("!!! Token không hợp lệ hoặc bị thiếu !!!");
+       return res.status(401).json({ success: false, message: 'Unauthorized: Invalid or missing token' });
     }
-    commit('SET_CART_LOADING', true);
-    commit('SET_CART_ERROR', null);
-    console.log("[Cart Actions] Fetching cart items...");
-    try {
-      const response = await axios.get('/api/cart', { params: { token } });
-      commit('UPDATE_CART_ITEMS', response.data);
-      console.log("[Cart Actions] Cart fetched.");
-    } catch (error) {
-      console.error("[Cart Actions] Error fetching cart:", error.response?.data || error.message);
-      commit('SET_CART_ERROR', error.response?.data?.message || 'Failed to fetch cart');
-       if (error.response && error.response.status === 401) {
-            // dispatch('login/logoutAction', null, { root: true });
-       }
-    } finally {
-       commit('SET_CART_LOADING', false);
-    }
-  },
 
-  async addCartItem({ commit, rootState }, product) {
-    const token = rootState.login.token;
-    if (!token) return Promise.reject('Authentication required'); // Trả về lỗi
-
-    commit('SET_CART_LOADING', true); // Có thể set loading khi thao tác
-    commit('SET_CART_ERROR', null);
-    console.log("[Cart Actions] Adding item via API:", product);
-    try {
-      // Gửi yêu cầu POST, data là product, token trong params
-      const response = await axios.post('/api/cart', product, { params: { token } });
-      commit('UPDATE_CART_ITEMS', response.data); // Cập nhật state bằng response từ server
-      console.log("[Cart Actions] Item added, cart updated from server.");
-      return Promise.resolve(); // Báo thành công
-    } catch (error) {
-      console.error("[Cart Actions] Error adding item:", error.response?.data || error.message);
-       commit('SET_CART_ERROR', error.response?.data?.message || 'Failed to add item');
-       if (error.response && error.response.status === 401) {
-            // dispatch('login/logoutAction', null, { root: true });
-       }
-       return Promise.reject(error); // Báo thất bại
-    } finally {
-       commit('SET_CART_LOADING', false);
-    }
-  },
-
-  async removeCartItem({ commit, rootState }, product) {
-    const token = rootState.login.token;
-    if (!token) return Promise.reject('Authentication required');
-
-    commit('SET_CART_LOADING', true);
-    commit('SET_CART_ERROR', null);
-    console.log("[Cart Actions] Removing item via API:", product);
-    try {
-      // Gửi yêu cầu POST đến /api/cart/delete
-      const response = await axios.post('/api/cart/delete', product, { params: { token } });
-      commit('UPDATE_CART_ITEMS', response.data);
-      console.log("[Cart Actions] Item removed/decreased, cart updated from server.");
-      return Promise.resolve();
-    } catch (error) {
-       console.error("[Cart Actions] Error removing item:", error.response?.data || error.message);
-       commit('SET_CART_ERROR', error.response?.data?.message || 'Failed to remove item');
-        if (error.response && error.response.status === 401) {
-            // dispatch('login/logoutAction', null, { root: true });
-       }
-       return Promise.reject(error);
-    } finally {
-       commit('SET_CART_LOADING', false);
-    }
-  },
-
-  async removeAllCartItems({ commit, rootState }) {
-    const token = rootState.login.token;
-    if (!token) return Promise.reject('Authentication required');
-
-    commit('SET_CART_LOADING', true);
-    commit('SET_CART_ERROR', null);
-    console.log("[Cart Actions] Clearing cart via API...");
-    try {
-       // Gửi yêu cầu POST đến /api/cart/delete/all
-      const response = await axios.post('/api/cart/delete/all', {}, { params: { token } }); // Không cần gửi data body
-      commit('UPDATE_CART_ITEMS', response.data); // Nên là mảng rỗng
-      console.log("[Cart Actions] Cart cleared, updated from server.");
-      return Promise.resolve();
-    } catch (error) {
-      console.error("[Cart Actions] Error clearing cart:", error.response?.data || error.message);
-      commit('SET_CART_ERROR', error.response?.data?.message || 'Failed to clear cart');
-       if (error.response && error.response.status === 401) {
-            // dispatch('login/logoutAction', null, { root: true });
-       }
-      return Promise.reject(error);
-    } finally {
-       commit('SET_CART_LOADING', false);
-    }
-  }
-};
-
-const getters = {
-  cartItems: state => state.cartItems,
-  cartQuantity: state => state.cartItems.reduce((sum, item) => sum + item.quantity, 0),
-  cartTotal: state => {
-    return state.cartItems.reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2);
-  },
-  cartLoading: state => state.loading, // Thêm getter nếu cần
-  cartError: state => state.error     // Thêm getter nếu cần
-};
-
-export default {
-  namespaced: true,
-  state,
-  mutations,
-  actions,
-  getters
-};
-content_copy
-download
-Use code with caution.
-JavaScript
-3. src/store/modules/login.js (Sử dụng axios):
-
-// src/store/modules/login.js
-import axios from 'axios';
-
-const initialToken = localStorage.getItem('authToken');
-
-const state = () => ({
-  token: initialToken || null,
-  loading: false,
-  error: null,
-});
-
-const mutations = {
-  SET_TOKEN(state, token) {
-    state.token = token;
-  },
-  SET_LOADING(state, isLoading) {
-    state.loading = isLoading;
-  },
-  SET_ERROR(state, error) {
-    state.error = error;
-  },
-  CLEAR_AUTH(state) {
-    state.token = null;
-    state.loading = false;
-    state.error = null;
-  }
-};
-
-const actions = {
-  async loginAction({ commit }) {
-    commit('SET_LOADING', true);
-    commit('SET_ERROR', null);
-    console.log("[Login Action] Attempting login via API...");
-    try {
-      // Gọi API thật, không cần gửi data body, không cần token
-      const response = await axios.post('/api/login');
-      const token = response.data.token;
-
-      if (!token) { // Kiểm tra nếu API không trả về token như mong đợi
-          throw new Error('Token not received from server');
-      }
-
-      localStorage.setItem('authToken', token);
-      commit('SET_TOKEN', token);
-      console.log("[Login Action] Login successful, token set.");
-      // Không cần trả về gì, component tự chuyển hướng
-    } catch (error) {
-      console.error("[Login Action] Login failed:", error.response?.data || error.message);
-      localStorage.removeItem('authToken');
-      commit('CLEAR_AUTH');
-      commit('SET_ERROR', error.response?.data?.message || 'Login failed');
-      throw error; // Ném lỗi để component LoginBox có thể bắt và hiển thị thông báo
-    } finally {
-      commit('SET_LOADING', false);
-    }
-  },
-
-  logoutAction({ commit }) {
-    return new Promise((resolve) => {
-      localStorage.removeItem('authToken');
-      commit('CLEAR_AUTH');
-      console.log('[Login Action] Logged out.');
-      resolve();
+    console.log("Token hợp lệ, đang đọc file giỏ hàng...");
+    readJsonFile(CART_DATA_FILE, (err, cart) => {
+        if (err) {
+            return res.status(500).send('Lỗi server khi lấy giỏ hàng.');
+        }
+        res.setHeader('Cache-Control', 'no-cache');
+        res.json(cart);
+        console.log("--- Đã trả về giỏ hàng ---");
     });
-  },
-
-  // Action để kiểm tra token khi khởi tạo (có thể gọi từ App.vue)
-  checkAuth({ commit }) {
-      const token = localStorage.getItem('authToken');
-      if (token) {
-          console.log('[Login Action] Found token in localStorage, setting in store.');
-          commit('SET_TOKEN', token);
-          // Có thể thêm lệnh gọi API để xác thực token này với server ở đây nếu cần
-      } else {
-          console.log('[Login Action] No token found in localStorage.');
-          commit('CLEAR_AUTH'); // Đảm bảo state sạch nếu không có token
-      }
-  }
-};
-
-const getters = {
-  isAuthenticated: state => !!state.token,
-  loading: state => state.loading,
-  token: state => state.token,
-  loginError: state => state.error // Thêm getter cho lỗi login
-};
-
-export default {
-  namespaced: true,
-  state,
-  mutations,
-  actions,
-  getters
-};
-content_copy
-download
-Use code with caution.
-JavaScript
-4. Cập nhật Component (Ví dụ App.vue):
-
-Bạn cần gọi action checkAuth khi App được tạo để đồng bộ token từ localStorage vào Vuex state ngay từ đầu.
-
-// src/App.vue
-// ... imports ...
-import { onMounted } from 'vue'; // Dùng onMounted trong setup
-
-// ... script setup ...
-const store = useStore();
-const router = useRouter();
-
-// ... computed properties (isAuthenticated, cartQuantity) ...
-
-// ... performLogout method ...
-
-// Gọi checkAuth khi component được mount
-onMounted(() => {
-  store.dispatch('login/checkAuth');
-  // Chỉ gọi fetch dữ liệu nếu ĐÃ xác thực (token hợp lệ)
-  // Việc fetch này nên được chuyển vào watch token hoặc làm trong checkAuth nếu cần xác thực token
-  // const token = store.getters['login/token'];
-  // if (token) {
-  //   store.dispatch('cart/getCartItems');
-  //   store.dispatch('product/getProductItems');
-  // }
 });
 
-// Vẫn giữ watch token để fetch dữ liệu KHI đăng nhập thành công
-watch(token, (newToken, oldToken) => {
-  if (newToken && !oldToken) { // Chỉ khi chuyển từ null -> token
-    console.log('App watch: Token changed, fetching initial data...');
-    store.dispatch('cart/getCartItems');
-    store.dispatch('product/getProductItems');
-  }
-});
-content_copy
-download
-Use code with caution.
-JavaScript
-Lưu ý quan trọng:
 
-Xử lý lỗi API: Code trên đã thêm try...catch cơ bản và commit mutation SET_..._ERROR. Bạn cần hiển thị các thông báo lỗi này trên giao diện người dùng nếu muốn.
-Xác thực Token: Action checkAuth hiện tại chỉ đọc từ localStorage. Trong ứng dụng thực tế, bạn nên thêm một lệnh gọi API (axios.get('/api/verify-token') chẳng hạn) bên trong checkAuth để xác nhận với server rằng token đó còn hợp lệ hay không. Nếu không hợp lệ, nên dispatch logoutAction.
-Truyền Token: Cách truyền token (params: { token } cho GET, POST) là ví dụ. Backend của bạn có thể yêu cầu truyền qua Header (Authorization: Bearer ${token}). Hãy điều chỉnh axios call cho phù hợp.
-Loading State: Các mutation SET_..._LOADING đã được thêm. Bạn có thể dùng mapGetters để lấy trạng thái loading trong component và hiển thị spinner hoặc vô hiệu hóa nút khi cần.
-Sau khi áp dụng các thay đổi này, ứng dụng Shopping Cart của bạn sẽ hoàn toàn sử dụng axios để giao tiếp với backend API thật (hoặc mock API được cấu trúc tương tự), thay vì dựa vào các hàm mock cục bộ.
+// POST /api/cart - Thêm sản phẩm vào giỏ hàng (CẦN TOKEN)
+app.post('/api/cart', (req, res) => {
+    const token = req.query.token; // Lấy token từ query param của POST request
+    const MOCK_API_TOKEN = 'D6W69PRgCoDKgHZGJmRUNA-example-token';
+
+    console.log("--- Yêu cầu POST /api/cart ---");
+    console.log("Token nhận được:", token);
+    console.log("Request body:", req.body);
+
+    if (!token || token !== MOCK_API_TOKEN) {
+       console.log("!!! Token không hợp lệ hoặc bị thiếu !!!");
+       return res.status(401).json({ success: false, message: 'Unauthorized: Invalid or missing token' });
+    }
+
+    // ... (Phần còn lại của logic đọc/ghi file cart giữ nguyên như code đã sửa lỗi trước đó) ...
+    readJsonFile(CART_DATA_FILE, (err, cartProducts) => {
+       // ... xử lý lỗi đọc file ...
+       if (!Array.isArray(cartProducts)) cartProducts = [];
+       const newCartProduct = req.body;
+       // ... logic thêm/tăng số lượng ...
+        fs.writeFile(CART_DATA_FILE, JSON.stringify(cartProducts, null, 4), (writeErr) => {
+          // ... xử lý lỗi ghi file ...
+          res.setHeader('Cache-Control', 'no-cache');
+          res.json(cartProducts);
+           console.log("--- Kết thúc POST /api/cart ---");
+        });
+    });
+});
+
+// ... (Các endpoint POST /api/cart/delete và /api/cart/delete/all cũng cần thêm kiểm tra token tương tự) ...
+
+// POST /api/cart/delete (CẦN TOKEN)
+app.post('/api/cart/delete', (req, res) => {
+    const token = req.query.token;
+    const MOCK_API_TOKEN = 'D6W69PRgCoDKgHZGJmRUNA-example-token';
+    if (!token || token !== MOCK_API_TOKEN) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    // ... (logic xóa/giảm số lượng) ...
+    readJsonFile(CART_DATA_FILE, (err, cartProducts) => {
+        // ... xử lý lỗi đọc file ...
+         if (!Array.isArray(cartProducts)) cartProducts = [];
+        const productIdToDelete = req.body.id;
+        // ... logic reduce để xóa/giảm ...
+        const updatedCart = cartProducts.reduce( ... );
+        fs.writeFile(CART_DATA_FILE, JSON.stringify(updatedCart, null, 4), (writeErr) => {
+            // ... xử lý lỗi ghi file ...
+            res.setHeader('Cache-Control', 'no-cache');
+            res.json(updatedCart);
+        });
+    });
+});
+
+// POST /api/cart/delete/all (CẦN TOKEN)
+app.post('/api/cart/delete/all', (req, res) => {
+    const token = req.query.token;
+    const MOCK_API_TOKEN = 'D6W69PRgCoDKgHZGJmRUNA-example-token';
+     if (!token || token !== MOCK_API_TOKEN) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    // ... (logic xóa tất cả) ...
+     const emptyCart = [];
+     fs.writeFile(CART_DATA_FILE, JSON.stringify(emptyCart, null, 4), (writeErr) => {
+        // ... xử lý lỗi ghi file ...
+        res.json(emptyCart);
+     });
+});
+
+
+// ----- Khởi động Server -----
+// ... app.listen và middleware bắt lỗi cuối cùng ...
+
+
+Những điểm chính đã thêm/sửa:
+
+Thêm app.post('/api/login', ...): Tạo endpoint mới để xử lý yêu cầu đăng nhập. Nó chỉ đơn giản trả về một JSON chứa success: true và một token cố định.
+
+Thêm Kiểm tra Token vào các Endpoint khác:
+
+Trong các endpoint GET /api/products, GET /api/cart, POST /api/cart, POST /api/cart/delete, POST /api/cart/delete/all, chúng ta thêm logic để đọc token từ query parameters (req.query.token).
+
+So sánh token nhận được với MOCK_API_TOKEN.
+
+Nếu token không hợp lệ hoặc thiếu, trả về lỗi 401 Unauthorized.
+
+Chỉ khi token hợp lệ, server mới tiếp tục xử lý đọc/ghi file và trả về dữ liệu thành công.
+
+Thêm Logs: Bổ sung console.log để dễ dàng theo dõi yêu cầu nào đang được xử lý và token nhận được là gì trên terminal của server.
+
+Các bước tiếp theo:
+
+Lưu file server.js với những thay đổi trên.
+
+Dừng server đang chạy (Ctrl + C).
+
+Khởi động lại server (npm run server hoặc npm run start).
+
+Thử lại chức năng Login trong ứng dụng Vue trên trình duyệt.
+
+Bây giờ, khi bạn bấm nút Login:
+
+Action login/loginAction sẽ gọi axios.post('/api/login').
+
+Proxy chuyển tiếp yêu cầu đến http://localhost:3000/api/login.
+
+Server Express sẽ khớp với endpoint app.post('/api/login', ...) mới thêm.
+
+Server trả về { success: true, token: '...' }.
+
+Action login/loginAction nhận được response thành công, lưu token vào localStorage và commit SET_TOKEN.
+
+Component LoginBox nhận được tín hiệu thành công (Promise resolve) và chuyển hướng sang /products.
+
+Lỗi "Login failed" sẽ không còn nữa và luồng đăng nhập sẽ hoạt động đúng. Đồng thời, các yêu cầu lấy dữ liệu sản phẩm/giỏ hàng sau đó cũng sẽ hoạt động vì chúng đã được gửi kèm token hợp lệ (do action Vuex đã lấy token từ state/localStorage để thêm vào API call).
+
+Cảm ơn bạn đã chỉ ra thiếu sót quan trọng này!
