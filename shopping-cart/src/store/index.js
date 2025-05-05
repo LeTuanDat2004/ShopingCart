@@ -1,13 +1,14 @@
-import { createStore } from 'vuex';
-import product from './modules/product';
-import cart from './modules/cart';
+import { createStore } from "vuex";
+import productModule from "./modules/product";
+import cartModule from "./modules/cart";
+import loginModule from "./modules/login/login"; // <-- Import module login
 
-// Create the store
 const store = createStore({
   modules: {
-    product,
-    cart
-  }
+    product: productModule,
+    cart: cartModule,
+    login: loginModule, // <-- Đăng ký module login
+  },
 });
 
 export default store;
