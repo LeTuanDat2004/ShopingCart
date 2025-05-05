@@ -1,0 +1,122 @@
+// src/components/product/ProductListItem.vue
+
+<template>
+  <div class="product-list--item">
+    <div class="product-details">
+      <h4 class="product-title">
+        <!-- Liên kết đến trang chi tiết sản phẩm -->
+        <router-link :to="productDetailLink" class="product-link">
+          {{ productItem.title }}
+        </router-link>
+      </h4>
+      <p class="product-description">{{ productItem.description }}</p>
+      <span class="product-price has-text-primary has-text-weight-bold">
+         ${{ productItem.price }}
+      </span>
+    </div>
+    <div class="product-actions">
+      <!-- Nút Add to Cart -->
+      <button @click="addItemToCart" class="button is-small is-primary is-outlined add-to-cart-btn" title="Add to Cart">
+        <font-awesome-icon :icon="faCartPlus" />
+        <span class="is-hidden-mobile"> Add to Cart</span> <!-- Ẩn chữ trên mobile nếu muốn -->
+      </button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { computed } from 'vue';
+import { useStore } from 'vuex';
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
+import { faCartPlus } from '@fortawesome/free-solid-svg-icons';
+
+// --- Props ---
+// Nhận thông tin chi tiết của một sản phẩm từ component cha (ProductList)
+const props = defineProps({
+  productItem: {
+    type: Object,
+    required: true,
+    // Thêm validation nếu cần, ví dụ kiểm tra có id, title, price
+    // validator: (value) => {
+    //   return value && typeof value.id === 'number' && value.title && typeof value.price === 'number';
+    // }
+  }
+});
+
+// --- Store ---
+const store = useStore();
+
+// --- Computed Properties ---
+// Tạo đối tượng route để dùng với router-link (cách làm rõ ràng hơn)
+const productDetailLink = computed(() => ({
+  name: 'ProductDetail', // Tên route chi tiết sản phẩm (định nghĩa trong router/index.js)
+  params: { id: props.productItem.id } // Truyền id sản phẩm làm tham số route
+}));
+
+// --- Methods ---
+// Hàm dispatch action 'cart/addCartItem' khi nút được click
+const addItemToCart = () => {
+  console.log(`[ProductListItem] Adding item: ${props.productItem.title}`);
+  // Gọi action từ module 'cart', truyền toàn bộ đối tượng productItem
+  store.dispatch('cart/addCartItem', props.productItem);
+  // Có thể thêm thông báo thành công nhỏ ở đây nếu muốn
+};
+</script>
+
+<style scoped>
+.product-list--item {
+  display: flex; /* Sử dụng flexbox để căn chỉnh */
+  justify-content: space-between; /* Đẩy details và actions ra hai bên */
+  align-items: center; /* Căn giữa theo chiều dọc */
+  padding: 15px 0; /* Tăng padding dọc */
+  border-bottom: 1px solid #eee; /* Đường kẻ phân cách */
+}
+
+.product-details {
+  flex-grow: 1; /* Cho phép phần details chiếm không gian còn lại */
+  margin-right: 15px; /* Khoảng cách với nút action */
+}
+
+.product-title {
+  margin-bottom: 5px; /* Khoảng cách dưới tiêu đề */
+  font-weight: 600;
+}
+
+.product-link {
+  color: #363636; /* Màu chữ mặc định cho link */
+  text-decoration: none;
+}
+.product-link:hover {
+  color: #3273dc; /* Màu khi hover (giống Bulma primary) */
+  text-decoration: underline;
+}
+
+
+.product-description {
+  font-size: 0.9em;
+  color: #7a7a7a;
+  margin-bottom: 8px; /* Khoảng cách dưới mô tả */
+}
+
+.product-price {
+  display: block; /* Cho giá xuống dòng riêng */
+  font-size: 1em;
+}
+
+.product-actions {
+  flex-shrink: 0; /* Không cho phần actions bị co lại */
+}
+
+.add-to-cart-btn {
+  /* Style thêm cho nút nếu cần */
+}
+
+.add-to-cart-btn svg { /* Style cho icon bên trong nút */
+  margin-right: 5px;
+}
+
+/* Cân nhắc ẩn chữ "Add to Cart" trên màn hình nhỏ nếu cần */
+/* @media screen and (max-width: 768px) { */
+  /* .add-to-cart-btn span { display: none; } */
+/* } */
+</style>
