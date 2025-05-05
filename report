@@ -1,0 +1,103 @@
+Chắc chắn rồi, đây là bản báo cáo tổng kết về dự án ứng dụng Shopping Cart đã được tích hợp routing, dựa trên quá trình xây dựng và sửa lỗi mà chúng ta vừa hoàn thành.
+
+Chủ đề: Báo cáo Dự án - Ứng dụng Shopping Cart với Vuex và Routing (Hoàn thiện)
+
+Tổng quan Dự án:
+Dự án này xây dựng một ứng dụng giỏ hàng (Shopping Cart) hoàn chỉnh sử dụng Vue.js (phiên bản 2 hoặc 3 tùy thuộc vào thiết lập ban đầu), tích hợp thư viện quản lý trạng thái Vuex và thư viện định tuyến Vue Router. Mục tiêu chính là tạo ra một ứng dụng trang đơn (SPA) cho phép người dùng xem danh sách sản phẩm, xem chi tiết từng sản phẩm, thêm/xóa sản phẩm vào giỏ hàng, xem giỏ hàng và thực hiện quy trình đăng nhập/đăng xuất cơ bản. Dữ liệu được duy trì thông qua tương tác với một server backend (được giả lập hoặc chạy thực tế bằng Node.js/Express).
+
+Kiến trúc và Công nghệ Chính:
+
+Frontend (Client):
+
+Vue.js: Framework JavaScript chính.
+
+Vuex: Thư viện quản lý trạng thái tập trung, được chia thành các modules (product, cart, login) với namespaced: true để tổ chức tốt hơn.
+
+State: Lưu trữ dữ liệu ứng dụng phía client (danh sách sản phẩm, giỏ hàng, token xác thực, trạng thái loading/error).
+
+Mutations: Các hàm đồng bộ duy nhất được phép thay đổi state (ví dụ: UPDATE_PRODUCT_ITEMS, UPDATE_CART_ITEMS, SET_TOKEN, SET_LOADING).
+
+Actions: Xử lý logic nghiệp vụ và các tác vụ bất đồng bộ (gọi API). Actions gọi API bằng axios, sau đó commit mutations để cập nhật state khi có kết quả từ server. Actions cũng xử lý việc lấy token và gửi kèm theo các yêu cầu cần xác thực.
+
+Getters: Cung cấp cách truy cập dữ liệu từ state một cách có tính toán hoặc thuận tiện (ví dụ: productItems, cartItems, cartTotal, cartQuantity, isAuthenticated, loading).
+
+Vue Router: Quản lý việc điều hướng giữa các "trang" ảo của ứng dụng.
+
+History Mode: Sử dụng mode: 'history' (Vue 2) hoặc createWebHistory() (Vue 3) cho URL sạch.
+
+Routes: Định nghĩa các ánh xạ giữa đường dẫn URL (/, /products, /products/:id, /cart, /login, *) và các component tương ứng (ProductList, ProductItem, CartList, LoginBox, NotFound). Sử dụng Dynamic Route Matching (:id) cho trang chi tiết sản phẩm.
+
+Navigation Guards:
+
+router.beforeEach: Global guard kiểm tra meta: { requiresAuth: true } và isAuthenticated getter để tự động chuyển hướng người dùng chưa đăng nhập về trang /login.
+
+beforeEnter (trên route /login): Chuyển hướng người dùng đã đăng nhập về /products.
+
+beforeEnter (trên route /products/:id): Kiểm tra tính hợp lệ của id sản phẩm, chuyển hướng về /not-found nếu không hợp lệ.
+
+<router-link>: Sử dụng để tạo các liên kết điều hướng (Shop, Cart, chi tiết sản phẩm).
+
+<router-view>: Đặt trong App.vue làm nơi hiển thị component tương ứng với route hiện tại.
+
+Components: Ứng dụng được chia thành các Single-File Components (.vue) tái sử dụng được (App, ProductList, ProductListItem, CartList, CartListItem, ProductItem, LoginBox, NotFound).
+
+axios: Thư viện thực hiện các HTTP request đến server backend.
+
+Font Awesome (Tùy chọn): Sử dụng thư viện @fortawesome/vue-fontawesome để hiển thị icon một cách hiệu quả.
+
+Backend (Server - Giả lập hoặc Node.js/Express):
+
+Cung cấp các API Endpoints (/api/login, /api/products, /api/cart...) để client tương tác.
+
+Xử lý logic nghiệp vụ đơn giản (thêm/xóa/lấy dữ liệu).
+
+Lưu trữ dữ liệu (trong ví dụ này là file JSON, thực tế là database).
+
+Thực hiện xác thực token đơn giản cho các endpoint cần thiết.
+
+Chạy trên một port riêng biệt (ví dụ: 3000).
+
+Môi trường Phát triển:
+
+Sử dụng Vue CLI hoặc Vite để quản lý dự án, biên dịch code, và chạy dev server.
+
+Dev Server Proxy: Cấu hình trong vue.config.js hoặc vite.config.js để chuyển tiếp các yêu cầu /api từ client (port 8080/5173) đến server backend (port 3000), giải quyết vấn đề CORS.
+
+concurrently: Chạy đồng thời cả dev server client và server backend bằng lệnh npm run start.
+
+Gitpod/Codesandbox: Cấu hình devServer (đặc biệt là host, allowedHosts, client.webSocketURL cho Vue CLI hoặc server.hmr.port cho Vite) để hoạt động đúng trong môi trường container hóa.
+
+Luồng Hoạt động Chính Đã Hoàn Thiện:
+
+Khởi chạy: App load, checkAuth action chạy, đồng bộ token từ localStorage vào Vuex. Global guard chuyển hướng đến /login (nếu chưa có token) hoặc /products (nếu có token).
+
+Fetch dữ liệu ban đầu: Nếu đã có token, watch trong App.vue kích hoạt, dispatch các action product/getProductItems và cart/getCartItems. Các action này lấy token từ state, gọi API backend (đã xác thực), nhận dữ liệu, commit mutation cập nhật state. Giao diện hiển thị danh sách sản phẩm và thông tin giỏ hàng.
+
+Đăng nhập: Tại /login, người dùng click Login. LoginBox dispatch login/loginAction. Action gọi POST /api/login, nhận token, lưu vào localStorage, commit SET_TOKEN. watch trong App.vue thấy token thay đổi -> fetch dữ liệu ban đầu. Component LoginBox chuyển hướng đến /products.
+
+Xem chi tiết sản phẩm: Click vào tên sản phẩm trên ProductList. <router-link> điều hướng đến /products/:id. vue-router render ProductItem. ProductItem lấy id từ route (qua props), dùng getter product/productItemFromId để lấy thông tin sản phẩm từ state và hiển thị.
+
+Thêm/Xóa giỏ hàng: Click nút tương ứng. Component dispatch action (cart/addCartItem, cart/removeCartItem...). Action gọi API POST lên server (kèm token). Server xử lý, trả về giỏ hàng mới. Action commit mutation UPDATE_CART_ITEMS. Các component liên quan (CartList, CartListItem, số lượng ở header) tự động cập nhật.
+
+Đăng xuất: Click Logout. App.vue dispatch login/logoutAction. Action xóa token khỏi localStorage, commit CLEAR_AUTH. watch trong App.vue thấy token thành null (không làm gì thêm). Component chuyển hướng về /login.
+
+Truy cập trái phép: Nếu người dùng chưa đăng nhập cố vào /products hoặc /cart, global guard sẽ chuyển hướng về /login. Nếu người dùng đã đăng nhập cố vào /login, guard của route /login sẽ chuyển hướng về /products.
+
+Kết quả:
+Đã xây dựng thành công một ứng dụng SPA Shopping Cart hoàn chỉnh, thể hiện rõ sự tương tác giữa Frontend (Vue, Vuex, Vue Router) và Backend (Node.js/Express API). Ứng dụng có khả năng:
+
+Phân chia giao diện thành các trang riêng biệt thông qua routing.
+
+Quản lý trạng thái tập trung và hiệu quả bằng Vuex modules.
+
+Thực hiện các thao tác CRUD cơ bản với giỏ hàng.
+
+Đồng bộ hóa trạng thái giữa client và server.
+
+Lưu trữ dữ liệu giỏ hàng lâu dài.
+
+Thực hiện quy trình xác thực (login/logout) và bảo vệ route cơ bản.
+
+Cấu trúc code rõ ràng, dễ bảo trì nhờ Single-File Components và Vuex Modules.
+
+Bài học rút ra: Nắm vững cách kết hợp Vue Router và Vuex để xây dựng luồng dữ liệu và điều hướng phức tạp trong SPA. Hiểu rõ tầm quan trọng của việc đồng bộ trạng thái client-server và cách xử lý các tác vụ bất đồng bộ khi tương tác với API. Làm quen với việc cấu hình môi trường phát triển client-server và xử lý các vấn đề phổ biến như CORS (thông qua proxy).
