@@ -1,0 +1,58 @@
+// src/components/product/ProductListItem.vue
+<script>
+import { mapActions, mapGetters } from 'vuex'; // Import mapGetters nếu cần truy cập getter
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'; // Import nếu dùng FontAwesome
+import { faCartPlus } from '@fortawesome/free-solid-svg-icons'; // Import icon
+
+export default {
+  name: 'ProductListItem', // Nên có name
+  components: {
+    FontAwesomeIcon // Đăng ký component FontAwesomeIcon
+  },
+  // --- Khai báo Props theo cú pháp Vue 2 ---
+  props: {
+    productItem: {
+      type: Object,
+      required: true
+      // validator: ... (vẫn dùng được)
+    }
+  },
+  // --- Nếu cần truy cập getter hoặc state khác ---
+  // computed: {
+  //   // Ví dụ map getter từ module 'product' (phải có namespaced: true)
+  //   // ...mapGetters('product', ['someOtherGetter'])
+  // },
+  data() {
+    // Nếu cần lưu trữ icon để template truy cập
+    return {
+       cartIcon: faCartPlus // Gán icon vào data
+    }
+  },
+  methods: {
+    // --- Map actions từ module 'cart' (phải có namespaced: true) ---
+    ...mapActions('cart', ['addCartItem']), // Tạo ra this.addCartItem
+
+    // Hàm xử lý sự kiện click (có thể đổi tên nếu muốn)
+    addItemToCartInternal() {
+      console.log(`[ProductListItem] Adding item: ${this.productItem.title}`);
+      // Gọi action đã được map, truyền productItem từ props
+      this.addCartItem(this.productItem);
+    }
+
+    // --- Không dùng useStore() trong Vue 2 ---
+    // --- Không dùng useRouter() trong Vue 2 (dùng this.$router) ---
+    // --- Không dùng computed(() => ...) trực tiếp trong methods ---
+
+    // --- Hàm getImageUrl nếu cần (ví dụ) ---
+    // getImageUrl(imageTag) {
+    //    try {
+    //        // Cách dùng require trong Vue 2/Webpack
+    //        return require(`@/assets/${imageTag}`); // Sử dụng @ là alias cho src
+    //    } catch(e) {
+    //        console.warn(`Image not found: ${imageTag}`);
+    //        return require('@/assets/placeholder.png'); // Ảnh mặc định
+    //    }
+    // }
+  }
+}
+</script>
